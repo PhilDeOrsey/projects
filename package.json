@@ -19,5 +19,8 @@
   "homepage": "https://github.com/PhilDeOrsey/projects#readme",
   "devDependencies": {
     "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "@mathigon/boost": "^1.2.31"
   }
 }

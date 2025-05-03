@@ -3,8 +3,8 @@
 Compile this file into main.js using the TypeScript compiler: tsc main.ts
 Make sure main.js is placed alongside your index.html. */
 // Get references to the SVG and the circle
-const svg = document.getElementById("mySvg") as SVGSVGElement;
-const circle = document.getElementById("draggableCircle") as SVGCircleElement;
+const svg = document.getElementById("mySvg");
+const circle = document.getElementById("draggableCircle");
 
 let isDragging = false;
 let offsetX = 0;

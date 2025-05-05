@@ -3,7 +3,8 @@
     // Targets modern JavaScript features (e.g. async/await)
     "target": "ES2017",
     // Generates ES modules that can be loaded via <script type="module">
-    "module": "es2015",
+    "moduleResolution": "Node",
+    "module": "ESNext",
 
     // Typical set of library definitions (DOM APIs + ES2017 features)
     "lib": ["dom", "es2017"],

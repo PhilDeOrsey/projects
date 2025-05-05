@@ -5,10 +5,10 @@
 
 // Interfaces
 
-import {clamp} from "../helpers";
+import {clamp} from "@mathigon/fermat";
 
 interface ShapeConfig {
-    type: "circle" | "rect" | "polygon";
+    type: "circle" | "rect" | "polygon" | "path";
     attributes: { [key: string]: string | number };
     draggable?: boolean;
 }
@@ -38,6 +38,16 @@ const shapesConfig: ShapeConfig[] = [
             points: "200,200 400,200 400,400 200,400", // x,y coordinates for each point
             fill: "none",
             stroke: "black",
+            strokeWidth: "2"
+        },
+        draggable: true
+    },
+    {
+        type: "path",
+        attributes: {
+            d: "M 200, 200 L 400, 200",
+            fill: "none",
+            stroke: "blue",
             strokeWidth: "2"
         },
         draggable: true

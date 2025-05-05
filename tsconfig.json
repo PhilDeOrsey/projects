@@ -1,0 +1,28 @@
+{
+  "compilerOptions": {
+    // Targets modern JavaScript features (e.g. async/await)
+    "target": "ES2017",
+    // Generates ES modules that can be loaded via <script type="module">
+    "module": "es2015",
+
+    // Typical set of library definitions (DOM APIs + ES2017 features)
+    "lib": ["dom", "es2017"],
+
+    // Strict type-checking options
+    "strict": true,
+
+    // Tells the compiler where to generate the .js files
+    "outDir": "dist",
+
+    // Helps import/export compatibility between CommonJS and ES modules
+    "esModuleInterop": true,
+
+    // Requires import paths to match their underlying file casing
+    "forceConsistentCasingInFileNames": true,
+
+    // Skips checking .d.ts files from your dependencies
+    "skipLibCheck": true,
+  },
+  // Tells TypeScript which files to compile
+  "include": ["src/**/*"]
+}

@@ -14,3 +14,9 @@ height: 100%;
 display: block;
 background-color: #f0f0f0;
 }
+
+.active {
+    stroke: black;
+    stroke-width: 3;
+    /* Add any other styles you want for the active state */
+}

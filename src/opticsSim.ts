@@ -41,6 +41,7 @@ export interface RoomBounds {
 
 // TODO: Add more mirror positioning options;
 type MirrorLocations = 'top-bottom' | 'left-right' | 'all';
+type ImageData = {shape: SVGElement, line: Line, id: string};
 
 export class OpticsSim {
     private isDragging = false;
@@ -50,13 +51,15 @@ export class OpticsSim {
     private offsetY = 0;
     private mirrorLines: Line[] = [];
     private config: OpticsSimConfig;
-    private imageMap: Map<string, SVGElement[]> = new Map();
+    /** String is the name of the parent, Image data is the what is needed to construct the image */
+    private imageMap: Map<string, ImageData[]> = new Map();
 
     constructor(config: OpticsSimConfig) {
         this.config = config;
         this.setupMirrors();
         this.initializeShapes();
         this.bindEvents();
+        console.log(this.imageMap);
     }
 
     private createShape(shapeData: ShapeConfig): SVGElement {
@@ -113,37 +116,11 @@ export class OpticsSim {
             const shapeEl = this.createShape(shapeData);
 
             // TODO create all images
-            if (shapeData.type === "circle") {
-                // TODO: better typing
-                const point = this.reflectCircle(shapeEl, this.mirrorLines[1])!;
-                const imageCircle = this.createShape({
-                    id: shapeData.id,
-                    type: "circle",
-                    attributes: {
-                        cx: point.x,
-                        cy: point.y,
-                        r: shapeData.attributes.r,
-                        fill: "gray"
-                    },
-                    draggable: false
-                });
-                svg.appendChild(imageCircle);
-                this.imageMap.set(shapeData.id, [...(this.imageMap.get(shapeData.id) || []), imageCircle]);
-            } else {
-                // do this for polygons
-                const imagePoints = this.reflectPolygon(shapeEl, this.mirrorLines[1]) || '';
-                const imagePolygon = this.createShape({
-                    id: shapeData.id,
-                    type: "polygon",
-                    attributes: {
-                        points: imagePoints,
-                        fill: "gray"
-                    },
-                    draggable: false
-                });
-                svg.appendChild(imagePolygon);
-                this.imageMap.set(shapeData.id, [...(this.imageMap.get(shapeData.id) || []), imagePolygon]);
-            }
+            this.buildImages({
+                svg,
+                shapeEl,
+                shapeData
+            });
 
             svg.appendChild(shapeEl);
         });
@@ -153,6 +130,84 @@ export class OpticsSim {
         this.config.svg.addEventListener("mousedown", this.onMouseDown.bind(this));
         window.addEventListener("mousemove", this.onMouseMove.bind(this));
         window.addEventListener("mouseup", this.onMouseUp.bind(this));
+    }
+
+    private buildCircleImage(data: {svg: SVGElement, shapeEl: SVGElement, shapeData: ShapeConfig}, line: Line) {
+        const {svg, shapeEl, shapeData} = data;
+        // TODO: better typing
+        const point = this.reflectCircle(shapeEl, line)!;
+        const imageCircle = this.createShape({
+            id: shapeData.id,
+            type: "circle",
+            attributes: {
+                cx: point.x,
+                cy: point.y,
+                r: shapeData.attributes.r,
+                fill: "gray"
+            },
+            draggable: false
+        });
+        svg.appendChild(imageCircle);
+        this.imageMap.set(shapeData.id, [...(this.imageMap.get(shapeData.id) || []), {shape: imageCircle, line, id: shapeData.id}]);
+        return imageCircle;
+    }
+
+    private buildPolygonImage(data: {svg: SVGElement, shapeEl: SVGElement, shapeData: ShapeConfig, parentId: string}, line: Line) {
+        const {svg, shapeEl, shapeData} = data;
+        const imagePoints = this.reflectPolygon(shapeEl, line) || '';
+        const imagePolygon = this.createShape({
+            id: shapeData.id,
+            type: "polygon",
+            attributes: {
+                points: imagePoints,
+                fill: "gray"
+            },
+            draggable: false
+        });
+        svg.appendChild(imagePolygon);
+        this.imageMap.set(data.parentId, [...(this.imageMap.get(data.parentId) || []), {shape: imagePolygon, line, id: shapeData.id}]);
+        return imagePolygon;
+    }
+
+    private buildImages(data: {svg: SVGElement, shapeEl: SVGElement, shapeData: ShapeConfig}) {
+        const len = this.mirrorLines.length;
+        if (data.shapeData.type === "circle") {
+            for (let i = 0; i < len; i++) {
+                const imageCircle = this.buildCircleImage(data, this.mirrorLines[i]);
+                for (let j = 0; j < len; j++) {
+                    if (i === j) continue;
+                    const newData = {
+                        ...data, shapeEl: imageCircle
+                    }
+                    this.buildCircleImage(newData, this.mirrorLines[j]);
+                }
+            }
+        } else if (data.shapeData.type === 'polygon') {
+            for (let i = 0; i < len; i++) {
+                const level1Data = {
+                    ...data,
+                    shapeData: {
+                        ...data.shapeData,
+                        id: data.shapeData.id + `reflection${i}`
+                    },
+                    parentId: data.shapeData.id,
+                }
+                const imagePolygon = this.buildPolygonImage(level1Data, this.mirrorLines[i]);
+                for (let j = 0; j < len; j++) {
+                    if (i === j) continue;
+                    const newData = {
+                        ...data,
+                        shapeEl: imagePolygon,
+                        shapeData: {
+                            ...data.shapeData,
+                            id: data.shapeData.id + `reflection${i}${j}`
+                        },
+                        parentId: data.shapeData.id + `reflection${i}`
+                    }
+                    this.buildPolygonImage(newData, this.mirrorLines[j]);
+                }
+            }
+        }
     }
 
     private setupMirrors() {
@@ -257,9 +312,9 @@ export class OpticsSim {
             const imageCircles = this.imageMap.get(this.currentShape.getAttribute("data-shape-id")!);
             for (const c of imageCircles || []) {
 
-                const point = this.reflectCircle(this.currentShape, this.mirrorLines[1])!;
-                c.setAttribute("cx", point.x.toString());
-                c.setAttribute("cy", point.y.toString());
+                const point = this.reflectCircle(this.currentShape, c.line)!;
+                c.shape.setAttribute("cx", point.x.toString());
+                c.shape.setAttribute("cy", point.y.toString());
             }
         } else if (this.currentShapeType === "polygon") {
             const pointString = this.currentShape.getAttribute('points');
@@ -297,11 +352,22 @@ export class OpticsSim {
 
             this.currentShape.setAttribute('points', newPointsString);
 
-            const imagePolygons = this.imageMap.get(this.currentShape.getAttribute("data-shape-id")!);
-            for (const polygon of imagePolygons || []) {
+            const imagePolygonData = this.imageMap.get(this.currentShape.getAttribute("data-shape-id")!);
+            for (const data of imagePolygonData || []) {
+                console.log(data);
 
-                const points = this.reflectPolygon(this.currentShape, this.mirrorLines[1])!;
-                polygon.setAttribute('points', points);
+                const points = this.reflectPolygon(this.currentShape, data.line)!;
+                data.shape.setAttribute('points', points);
+
+                const childImagePolygonData = this.imageMap.get(data.id)!;
+                // TODO: this is gross we need some kind of recursion? Also gross.
+                for (const childData of childImagePolygonData || []) {
+                    console.log(childData);
+
+                    const points = this.reflectPolygon(data.shape, childData.line)!;
+                    childData.shape.setAttribute('points', points);
+
+                }
             }
         }
     }

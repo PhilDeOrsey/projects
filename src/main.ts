@@ -6,18 +6,18 @@ const shapes: ShapeConfig[] = [
         id: 'circle1',
         type: "circle",
         attributes: {
-            cx: 300,
-            cy: 300,
-            r: 20,
+            cx: 500,
+            cy: 350,
+            r: 15,
             fill: "blue"
         },
         draggable: true
     },
     {
-        id: 'rect1',
+        id: 'poly1',
         type: "polygon",
         attributes: {
-            points: "250,250 325,250 325,300 250,300",
+            points: "450,400 525,400 525,450 450,450 475,425",
             fill: "red"
         },
         draggable: true
@@ -25,17 +25,17 @@ const shapes: ShapeConfig[] = [
 ];
 
 const bounds: RoomBounds = {
-    x: 200,
-    y: 200,
-    width: 400,
-    height: 400
+    x: 400,
+    y: 300,
+    width: 200,
+    height: 200
 };
 
 const config: OpticsSimConfig = {
     svg: document.querySelector('svg')!,
     shapes: shapes,
     bounds: bounds,
-    mirrorLocation: 'left-right'
+    mirrorLocation: 'all'
 };
 
 new OpticsSim(config);

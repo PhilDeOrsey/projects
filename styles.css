@@ -20,3 +20,22 @@ background-color: #f0f0f0;
     stroke-width: 3;
     /* Add any other styles you want for the active state */
 }
+
+.instructions {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    color: white;
+    font-family: Arial, sans-serif;
+    font-size: 16px;
+    z-index: 1000;
+    background-color: rgba(0, 0, 0, 0.5);
+    padding: 10px;
+    border-radius: 5px;
+    user-select: none;
+    max-width: 200px;
+    word-wrap: break-word;
+    line-height: 1.4;
+}
+
+

@@ -3,8 +3,8 @@
 // Phil DeOrsey
 // =======================
 
-import {Line, Point, Polygon} from "@mathigon/euclid";
-import {Color} from "@mathigon/core";
+import {intersections, Line, Point, Polygon, Segment} from "@mathigon/euclid";
+import {Color, wait} from "@mathigon/core";
 
 const parsePoints = (pointString: string)=> {
     const points = pointString.split(' ');
@@ -54,11 +54,13 @@ export class OpticsSim {
     private config: OpticsSimConfig;
     /** String is the name of the parent, Image data is the what is needed to construct the image */
     private imageMap: Map<string, ImageData[]> = new Map();
+    private reflectionSegments: Segment[][] = [];
 
     constructor(config: OpticsSimConfig) {
         this.config = config;
         this.setupMirrors();
         this.initializeShapes();
+        this.setupReflectionSegments();
         this.bindEvents();
     }
 
@@ -84,6 +86,48 @@ export class OpticsSim {
         }
 
         return shapeEl;
+    }
+
+    private setupReflectionSegments() {
+        // Add the room segments
+
+        const {x, y, width, height} = this.config.bounds;
+        const roomSegments = [
+            new Segment(new Point(x, y), new Point(x + width, y)),
+            new Segment(new Point(x + width, y), new Point(x + width, y + height)),
+            new Segment(new Point(x + width, y + height), new Point(x, y + height)),
+            new Segment(new Point(x, y + height), new Point(x, y))
+        ];
+
+        // Add the secondary segments
+
+        const left = [
+            new Segment(new Point(x - width, y), new Point(x, y)),
+            new Segment(new Point(x, y + height), new Point(x - width, y + height)),
+            new Segment(new Point(x - width, y + height), new Point(x - width, y))
+        ];
+
+        const right = [
+            new Segment(new Point(x + width, y), new Point(x + 2 * width, y)),
+            new Segment(new Point(x + 2 * width, y + height), new Point(x + width, y + height)),
+            new Segment(new Point(x + 2 * width, y + height), new Point(x + 2 * width, y))
+        ];
+
+        const top = [
+            new Segment(new Point(x, y - height), new Point(x + width, y - height)),
+            new Segment(new Point(x + width, y - height), new Point(x + width, y)),
+            new Segment(new Point(x, y), new Point(x, y - height))
+        ];
+
+        const bot = [
+            new Segment(new Point(x, y + height), new Point(x, y + 2 * height)),
+            new Segment(new Point(x, y + 2 * height), new Point(x + width, y + 2 * height)),
+            new Segment(new Point(x + width, y + 2 * height), new Point(x + width, y + height))
+        ]
+
+        const secondarySegments = [...left, ...right, ...top, ...bot];
+
+        this.reflectionSegments = [roomSegments, secondarySegments];
     }
 
     private initializeShapes(): void {
@@ -288,7 +332,7 @@ export class OpticsSim {
         });
     }
 
-    private drawRay(target: SVGGraphicsElement) {
+    private drawSightLine(target: SVGGraphicsElement) {
         this.deleteRay();
 
         // Extract center point if target is a circle
@@ -314,6 +358,69 @@ export class OpticsSim {
                 'stroke-linecap': 'round'
             }
         });
+
+        this.drawLightPath(target, centerPoint, endPoint);
+
+    }
+
+    private async drawLightPath(target: SVGGraphicsElement, clickPoint: Point, endPoint: Point) {
+        // get the parent of the target
+        const shapeParentId = target.getAttribute('data-shape-id')!.replace(/reflection\d+$/, '');
+        const shapeParent = this.config.svg.querySelector(`[data-shape-id="${shapeParentId}"]`)!;
+
+        let startingSource = new Point(0, 0);
+        if (shapeParent.tagName.toLowerCase() === 'circle') {
+            const cx = parseFloat(shapeParent.getAttribute('cx') || '0');
+            const cy = parseFloat(shapeParent.getAttribute('cy') || '0');
+            startingSource = new Point(cx, cy);
+        } else if (shapeParent!.tagName.toLowerCase() === 'polygon') {
+            const stringPoints = shapeParent.getAttribute('points')!;
+            const polygon = new Polygon(...parsePoints(stringPoints));
+            startingSource = polygon.centroid;
+        }
+
+        const seg = new Segment(clickPoint, endPoint);
+        let wallHit: Segment | undefined;
+        let lastBounce: Point | undefined;
+
+        for (const wall of this.reflectionSegments[0]) {
+            const int = intersections(seg, wall);
+            if (int.length > 0) {
+                wallHit = wall;
+                lastBounce = int[0];
+                break;
+            }
+        }
+
+        if (!wallHit) return;
+
+        let firstBounce: Point | undefined;
+
+        for (const wall of this.reflectionSegments[1]) {
+            const int = intersections(seg, wall);
+            if (int.length > 0) {
+                firstBounce = int[0].reflect(new Line(wallHit.p1, wallHit.p2));
+                break;
+            }
+        }
+
+        const bouncePoints = [startingSource, firstBounce, lastBounce, endPoint].filter(t => t !== undefined);
+
+        for (let i = 0; i < bouncePoints.length - 1; i++) {
+            const start = bouncePoints[i] as Point;
+            const end = bouncePoints[i + 1] as Point;
+            await wait(250);
+            this.drawLine(start, end, {
+                stroke: '#39FF14',
+                attributes: {
+                    'data-is-ray': 'true',
+                    'stroke-linecap': 'round',
+                    'stroke-width': '4',
+                    opacity: '0.7'
+                }
+            });
+        }
+
     }
 
     private onMouseDown(event: MouseEvent): void {
@@ -322,7 +429,7 @@ export class OpticsSim {
 
         const isImage = target.getAttribute("data-shape-id")?.includes("reflection");
         if (isImage) {
-            this.drawRay(target);
+            this.drawSightLine(target);
             return;
         }
 
@@ -353,10 +460,8 @@ export class OpticsSim {
     }
 
     private deleteRay() {
-        const existingRay = this.config.svg.querySelector('[data-is-ray="true"]');
-        if (existingRay) {
-            existingRay.remove();
-        }
+        const existingRay = this.config.svg.querySelectorAll('[data-is-ray="true"]');
+        existingRay.forEach(ray => ray.remove());
     }
 
     private onMouseMove(event: MouseEvent): void {

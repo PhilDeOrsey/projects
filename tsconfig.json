@@ -1,13 +1,13 @@
 {
   "compilerOptions": {
     // Targets modern JavaScript features (e.g. async/await)
-    "target": "ES2017",
+    "target": "ES2019",
     // Generates ES modules that can be loaded via <script type="module">
     "moduleResolution": "Node",
     "module": "ESNext",
 
     // Typical set of library definitions (DOM APIs + ES2017 features)
-    "lib": ["dom", "es2017"],
+    "lib": ["dom", "es2019"],
 
     // Strict type-checking options
     "strict": true,

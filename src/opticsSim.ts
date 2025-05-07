@@ -3,7 +3,8 @@
 // Phil DeOrsey
 // =======================
 
-import {Line, Point} from "@mathigon/euclid";
+import {Line, Point, Polygon} from "@mathigon/euclid";
+import {Color} from "@mathigon/core";
 
 const parsePoints = (pointString: string)=> {
     const points = pointString.split(' ');
@@ -59,7 +60,6 @@ export class OpticsSim {
         this.setupMirrors();
         this.initializeShapes();
         this.bindEvents();
-        console.log(this.imageMap);
     }
 
     private createShape(shapeData: ShapeConfig): SVGElement {
@@ -92,21 +92,43 @@ export class OpticsSim {
         svg.innerHTML = '';
 
         // Create room boundary shape config
+        const gridSize = 3; // Number of rooms in each direction from center
+        const roomWidth = bounds.width;
+        const roomHeight = bounds.height;
+        const startX = bounds.x - (gridSize * roomWidth);
+        const startY = bounds.y - (gridSize * roomHeight);
+
         const roomBoundary: ShapeConfig = {
             id: "room-boundary",
             type: "path",
             attributes: {
-                d: `M ${bounds.x},${bounds.y} 
-           L ${bounds.x + bounds.width},${bounds.y} 
-           L ${bounds.x + bounds.width},${bounds.y + bounds.height} 
-           L ${bounds.x},${bounds.y + bounds.height} 
-           Z`,
+                d: generateGridPath(startX, startY, roomWidth, roomHeight, gridSize * 2 + 1),
                 fill: "none",
                 stroke: "#cccccc",
                 strokeWidth: "2"
             },
             draggable: false
         };
+
+// Helper function to generate the grid path
+        function generateGridPath(startX: number, startY: number, cellWidth: number, cellHeight: number, numCells: number): string {
+            let path = '';
+
+            // Draw vertical lines
+            for (let i = 0; i <= numCells; i++) {
+                const x = startX + (i * cellWidth);
+                path += `M ${x},${startY} L ${x},${startY + (numCells * cellHeight)} `;
+            }
+
+            // Draw horizontal lines
+            for (let i = 0; i <= numCells; i++) {
+                const y = startY + (i * cellHeight);
+                path += `M ${startX},${y} L ${startX + (numCells * cellWidth)},${y} `;
+            }
+
+            return path;
+        }
+
 
         // Combine room boundary with other shapes
         const allShapes = [roomBoundary, ...shapes];
@@ -132,7 +154,8 @@ export class OpticsSim {
         window.addEventListener("mouseup", this.onMouseUp.bind(this));
     }
 
-    private buildCircleImage(data: {svg: SVGElement, shapeEl: SVGElement, shapeData: ShapeConfig}, line: Line) {
+    // TODO: we should be able to combine these two image functions
+    private buildCircleImage(data: {svg: SVGElement, shapeEl: SVGElement, shapeData: ShapeConfig, parentId: string}, line: Line) {
         const {svg, shapeEl, shapeData} = data;
         // TODO: better typing
         const point = this.reflectCircle(shapeEl, line)!;
@@ -143,12 +166,12 @@ export class OpticsSim {
                 cx: point.x,
                 cy: point.y,
                 r: shapeData.attributes.r,
-                fill: "gray"
+                fill: Color.mix(Color.fromHex(shapeData.attributes.fill.toString()), `#fff`, 0.35).toString(),
             },
             draggable: false
         });
         svg.appendChild(imageCircle);
-        this.imageMap.set(shapeData.id, [...(this.imageMap.get(shapeData.id) || []), {shape: imageCircle, line, id: shapeData.id}]);
+        this.imageMap.set(data.parentId, [...(this.imageMap.get(data.parentId) || []), {shape: imageCircle, line, id: shapeData.id}]);
         return imageCircle;
     }
 
@@ -160,7 +183,7 @@ export class OpticsSim {
             type: "polygon",
             attributes: {
                 points: imagePoints,
-                fill: "gray"
+                fill: Color.mix(Color.fromHex(shapeData.attributes.fill.toString()), `#fff`, 0.35).toString(),
             },
             draggable: false
         });
@@ -173,11 +196,25 @@ export class OpticsSim {
         const len = this.mirrorLines.length;
         if (data.shapeData.type === "circle") {
             for (let i = 0; i < len; i++) {
-                const imageCircle = this.buildCircleImage(data, this.mirrorLines[i]);
+                const level1Data = {
+                    ...data,
+                    shapeData: {
+                        ...data.shapeData,
+                        id: data.shapeData.id + `reflection${i}`,
+                    },
+                    parentId: data.shapeData.id,
+                }
+                const imageCircle = this.buildCircleImage(level1Data, this.mirrorLines[i]);
                 for (let j = 0; j < len; j++) {
                     if (i === j) continue;
                     const newData = {
-                        ...data, shapeEl: imageCircle
+                        ...data,
+                        shapeEl: imageCircle,
+                        shapeData: {
+                            ...data.shapeData,
+                            id: data.shapeData.id + `reflection${i}${j}`,
+                        },
+                        parentId: data.shapeData.id + `reflection${i}`
                     }
                     this.buildCircleImage(newData, this.mirrorLines[j]);
                 }
@@ -188,7 +225,7 @@ export class OpticsSim {
                     ...data,
                     shapeData: {
                         ...data.shapeData,
-                        id: data.shapeData.id + `reflection${i}`
+                        id: data.shapeData.id + `reflection${i}`,
                     },
                     parentId: data.shapeData.id,
                 }
@@ -200,7 +237,7 @@ export class OpticsSim {
                         shapeEl: imagePolygon,
                         shapeData: {
                             ...data.shapeData,
-                            id: data.shapeData.id + `reflection${i}${j}`
+                            id: data.shapeData.id + `reflection${i}${j}`,
                         },
                         parentId: data.shapeData.id + `reflection${i}`
                     }
@@ -238,22 +275,56 @@ export class OpticsSim {
 
     private drawMirror(line: Line, name: string) {
         const [p1, p2] = [line.p1, line.p2]
-        this.config.svg.append(this.createShape({
+        this.config.shapes.push({
             id: name,
             type: "path",
             attributes: {
                 d: `M ${p1.x},${p1.y} L ${p2.x},${p2.y}`,
                 fill: "none",
-                stroke: "blue",
-                strokeWidth: "6"
+                stroke: `#96c8ffd9`,
+                'stroke-width': 6
             },
             draggable: false
-        }));
+        });
+    }
+
+    private drawRay(target: SVGGraphicsElement) {
+        this.deleteRay();
+
+        // Extract center point if target is a circle
+        let centerPoint = new Point(0, 0);
+        if (target.tagName.toLowerCase() === 'circle') {
+            const cx = parseFloat(target.getAttribute('cx') || '0');
+            const cy = parseFloat(target.getAttribute('cy') || '0');
+            centerPoint = new Point(cx, cy);
+        } else if (target!.tagName.toLowerCase() === 'polygon') {
+            const stringPoints = target.getAttribute('points')!;
+            const polygon = new Polygon(...parsePoints(stringPoints));
+            centerPoint = polygon.centroid;
+        }
+
+        const observer = this.config.svg.querySelector(`[data-shape-id="observer"]`)!;
+        let endPoint = new Point(parseFloat(observer.getAttribute('cx') || '0'), parseFloat(observer.getAttribute('cy') || '0'));
+
+        this.drawLine(centerPoint, endPoint, {
+            stroke: '#DAA520', // Optional: make the ray visible with a distinct color
+            attributes: {
+                'data-is-ray': 'true', // Add a data attribute to make the ray findable
+                'stroke-dasharray': '8,4', // Longer dashes with shorter gaps
+                'stroke-linecap': 'round'
+            }
+        });
     }
 
     private onMouseDown(event: MouseEvent): void {
         const target = event.target as SVGGraphicsElement;
         if (!target || !(target instanceof SVGGraphicsElement)) return;
+
+        const isImage = target.getAttribute("data-shape-id")?.includes("reflection");
+        if (isImage) {
+            this.drawRay(target);
+            return;
+        }
 
         const draggable = target.getAttribute("data-draggable") === "true";
         if (!draggable) return;
@@ -281,8 +352,17 @@ export class OpticsSim {
         }
     }
 
+    private deleteRay() {
+        const existingRay = this.config.svg.querySelector('[data-is-ray="true"]');
+        if (existingRay) {
+            existingRay.remove();
+        }
+    }
+
     private onMouseMove(event: MouseEvent): void {
         if (!this.isDragging || !this.currentShape || !this.currentShapeType) return;
+
+        this.deleteRay();
 
         const svgRect = this.config.svg.getBoundingClientRect();
         const bounds = this.config.bounds;
@@ -309,12 +389,22 @@ export class OpticsSim {
             this.currentShape.setAttribute("cx", newX.toString());
             this.currentShape.setAttribute("cy", newY.toString());
 
-            const imageCircles = this.imageMap.get(this.currentShape.getAttribute("data-shape-id")!);
-            for (const c of imageCircles || []) {
+            const imageCircleData = this.imageMap.get(this.currentShape.getAttribute("data-shape-id")!);
+            for (const data of imageCircleData || []) {
 
-                const point = this.reflectCircle(this.currentShape, c.line)!;
-                c.shape.setAttribute("cx", point.x.toString());
-                c.shape.setAttribute("cy", point.y.toString());
+                const point = this.reflectCircle(this.currentShape, data.line)!;
+                data.shape.setAttribute("cx", point.x.toString());
+                data.shape.setAttribute("cy", point.y.toString());
+
+                const childImageCircleData = this.imageMap.get(data.id)!;
+                // TODO: this is gross we should have a function that calls itself again
+                for (const childData of childImageCircleData || []) {
+
+                    const point = this.reflectCircle(data.shape, childData.line)!;
+                    childData.shape.setAttribute("cx", point.x.toString());
+                    childData.shape.setAttribute("cy", point.y.toString());
+
+                }
             }
         } else if (this.currentShapeType === "polygon") {
             const pointString = this.currentShape.getAttribute('points');
@@ -354,15 +444,13 @@ export class OpticsSim {
 
             const imagePolygonData = this.imageMap.get(this.currentShape.getAttribute("data-shape-id")!);
             for (const data of imagePolygonData || []) {
-                console.log(data);
 
                 const points = this.reflectPolygon(this.currentShape, data.line)!;
                 data.shape.setAttribute('points', points);
 
                 const childImagePolygonData = this.imageMap.get(data.id)!;
-                // TODO: this is gross we need some kind of recursion? Also gross.
+                // TODO: this is gross we should have a function that calls itself again
                 for (const childData of childImagePolygonData || []) {
-                    console.log(childData);
 
                     const points = this.reflectPolygon(data.shape, childData.line)!;
                     childData.shape.setAttribute('points', points);
@@ -401,6 +489,42 @@ export class OpticsSim {
         const reflectedPoints = points.map(point => point.reflect(line));
         return stringifyPoints(reflectedPoints);
     }
+
+    private drawLine(p1: Point, p2: Point, options: {
+        stroke?: string,
+        strokeWidth?: number,
+        id?: string,
+        draggable?: boolean,
+        attributes?: Record<string, string>
+    } = {}): SVGElement {
+        const {
+            stroke = '#000000',
+            strokeWidth = 2,
+            id = `line-${Math.random().toString(36).substr(2, 9)}`,
+            draggable = false,
+            attributes = {}
+        } = options;
+
+        const lineConfig: ShapeConfig = {
+            id: id,
+            type: "path",
+            attributes: {
+                d: `M ${p1.x},${p1.y} L ${p2.x},${p2.y}`,
+                fill: "none",
+                stroke: stroke,
+                'stroke-width': strokeWidth,
+                ...attributes // Spread additional attributes
+            },
+            draggable: draggable
+        };
+
+        const lineElement = this.createShape(lineConfig);
+        this.config.svg.appendChild(lineElement);
+
+        return lineElement;
+    }
+
+
 
     // Public methods for external control
     public updateShapes(newShapes: ShapeConfig[]): void {

@@ -28,6 +28,7 @@
   },
   "dependencies": {
     "@mathigon/boost": "^1.2.31",
+    "@mathigon/core": "^1.1.23",
     "@mathigon/euclid": "^1.2.4",
     "@mathigon/fermat": "^1.1.24"
   }

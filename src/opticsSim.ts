@@ -18,7 +18,6 @@ const stringifyPoints = (points: Point[]) => {
     return points.map(point => `${point.x},${point.y}`).join(' ');
 }
 
-
 export interface ShapeConfig {
     id: string;
     type: "circle" | "polygon" | "path";
@@ -154,7 +153,7 @@ export class OpticsSim {
             draggable: false
         };
 
-// Helper function to generate the grid path
+        // Helper function to generate the grid path
         function generateGridPath(startX: number, startY: number, cellWidth: number, cellHeight: number, numCells: number): string {
             let path = '';
 
@@ -181,7 +180,6 @@ export class OpticsSim {
         allShapes.forEach(shapeData => {
             const shapeEl = this.createShape(shapeData);
 
-            // TODO create all images
             this.buildImages({
                 svg,
                 shapeEl,
@@ -317,6 +315,7 @@ export class OpticsSim {
         }
     }
 
+    // TODO: Combine this with drawline method
     private drawMirror(line: Line, name: string) {
         const [p1, p2] = [line.p1, line.p2]
         this.config.shapes.push({
@@ -443,6 +442,7 @@ export class OpticsSim {
         this.currentShape = target;
         this.currentShapeType = shapeType;
         this.currentShape.style.cursor = "grabbing";
+        target.classList.add('active');
 
         const svgRect = this.config.svg.getBoundingClientRect();
 
@@ -565,16 +565,11 @@ export class OpticsSim {
         }
     }
 
-    private getShapeSize(shape: SVGGraphicsElement): { width: number; height: number } {
-        const bbox = shape.getBBox();
-        return { width: bbox.width, height: bbox.height };
-    }
-
-
     private onMouseUp(): void {
         if (this.currentShape) {
             this.currentShape.style.cursor = "grab";
         }
+        this.currentShape?.classList.remove('active');
         this.isDragging = false;
         this.currentShape = null;
         this.currentShapeType = null;
@@ -629,20 +624,4 @@ export class OpticsSim {
         return lineElement;
     }
 
-
-
-    // Public methods for external control
-    public updateShapes(newShapes: ShapeConfig[]): void {
-        this.config.shapes = newShapes;
-        this.initializeShapes();
-    }
-
-    public updateBounds(newBounds: RoomBounds): void {
-        this.config.bounds = newBounds;
-    }
-
-    public destroy(): void {
-        window.removeEventListener("mousemove", this.onMouseMove.bind(this));
-        window.removeEventListener("mouseup", this.onMouseUp.bind(this));
-    }
 }
